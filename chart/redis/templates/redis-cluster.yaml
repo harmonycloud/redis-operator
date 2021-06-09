@@ -1,0 +1,86 @@
+apiVersion: redis.middleware.hc.cn/v1alpha1
+kind: RedisCluster
+metadata:
+  labels:
+    nephele/user: admin
+  name: {{ include "redis.fullname" . }}
+spec:
+{{- if eq .Values.type "sentinel" }}
+  type: sentinel
+  sentinel:
+    {{- toYaml .Values.sentinel | nindent 6 }}
+{{- else if eq .Values.type "cluster" }}
+  type: cluster
+{{- else if eq .Values.type "replication" }}
+  type: replication
+{{- end }}
+  pod:
+  - affinity:
+      {{- if eq .Values.podAntiAffinity "hard"}}
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - {{ include "redis.fullname" . }}
+          topologyKey: {{ .Values.podAntiAffinityTopologKey }}
+      {{- else if eq .Values.podAntiAffinity "soft"}}
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: {{ .Values.podAntiAffinityTopologKey }}
+            labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - {{ include "redis.fullname" . }}
+      {{- end}}
+      {{- with .Values.nodeAffinity }}
+      nodeAffinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    annotations:
+      fixed-node-middleware-pod: "true"
+      fixed.ipam.harmonycloud.cn: "true"
+    configmap: {{ include "redis.fullname" . }}-config
+    env:
+    - name: MAXMEMORY
+      value: {{ .Values.redisMaxMemory }}
+    - name: SYS_CODE
+      value: {{ include "redis.fullname" . }}
+    initImage: redis-init:{{ .Values.image.initImageTag }}
+    labels:
+      harmonycloud.cn/statefulset: {{ include "redis.fullname" . }}
+      middleware: redis
+      nephele/user: admin
+    middlewareImage: redis-cli-v5-port:{{ .Values.image.redisImageTag }}
+    monitorImage: redis-exporter:{{ .Values.image.exporterImageTag }}
+    requirepass: {{ .Values.redisPassword | quote}}
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    hostNetwork: {{ default false .Values.hostNetwork }}
+    resources:
+      {{- toYaml .Values.redis.resources | nindent 6 }}
+    updateStrategy: {}
+  podManagementPolicy: Parallel
+  replicas: {{ .Values.redis.replicas }}
+  servicePort: {{ .Values.redisServicePort }}
+  repository: {{ .Values.image.repository }}/
+  updateStrategy:
+  {{- toYaml .Values.updateStrategy | nindent 4 }}
+  version: 5.0.8
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.storageClassName }}
+      storageClassName: {{ .Values.storageClassName }}
+      {{- end}}
+      resources:
+        requests:
+          storage: {{ .Values.storageSize }}
+

@@ -1,0 +1,60 @@
+apiVersion: v1
+data:
+  redis.conf: |-
+  {{- if eq .Values.type "sentinel" }}
+    slaveof 127.0.0.1 6379
+    cluster-enabled no
+  {{- else if eq .Values.type "cluster" }}
+    cluster-enabled yes
+  {{- end }}
+    masterauth {REDIS_PASS}
+    appendonly no
+    lua-time-limit 5000
+    slowlog-log-slower-than 10000
+    maxmemory {MAX_MEMORY}
+    zset-max-ziplist-entries 128
+    cluster-config-file nodes-{REDIS_INSTANCE_PORT}.conf
+    save 60 10000
+    tcp-backlog 511
+    tcp-keepalive 60
+    dir /{PATH_PREFIX}/redis/{DOMAIN_NAME}/{NAMESPACE}/{REDIS_CLUSTER_NAME}/{POD_NAME}/data
+    stop-writes-on-bgsave-error no
+    slave-serve-stale-data yes
+    timeout 300
+    pidfile /{PATH_PREFIX}/redis/{DOMAIN_NAME}/{NAMESPACE}/{REDIS_CLUSTER_NAME}/{POD_NAME}/log/redis-{REDIS_INSTANCE_PORT}.pid
+    activerehashing yes
+    cluster-announce-ip {PODIP}
+    dbfilename dump-{REDIS_INSTANCE_PORT}.rdb
+    hz 10
+    bind {PODIP}
+    cluster-node-timeout 15000
+    repl-backlog-size 256mb
+    repl-diskless-sync no
+    list-max-ziplist-entries 512
+    repl-diskless-sync-delay 5
+    hash-max-ziplist-value 64
+    databases 16
+    slave-read-only yes
+    daemonize no
+    latency-monitor-threshold 0
+    hash-max-ziplist-entries 512
+    logfile "/{PATH_PREFIX}/redis/{DOMAIN_NAME}/{NAMESPACE}/{REDIS_CLUSTER_NAME}/{POD_NAME}/log/{SYS_CODE}-redis-{REDIS_INSTANCE_PORT}.log"
+    rdbchecksum yes
+    cluster-require-full-coverage no
+    client-output-buffer-limit pubsub 32mb 8mb 60
+    maxclients 15000
+    slave-priority 100
+    hll-sparse-max-bytes 3000
+    repl-disable-tcp-nodelay no
+    notify-keyspace-events ""
+    port {REDIS_INSTANCE_PORT}
+    slowlog-max-len 1000
+    loglevel notice
+    list-max-ziplist-value 64
+    set-max-intset-entries 512
+    zset-max-ziplist-value 64
+    rdbcompression yes
+    requirepass {REDIS_PASS} 
+kind: ConfigMap
+metadata:
+  name: {{ include "redis.fullname" . }}-config

@@ -1,0 +1,49 @@
+redisPassword: "123455"
+redisServicePort: 6379
+
+storageSize: 1G
+#storageClassName: middleware-lvm
+
+# sentinel/cluster
+type: cluster
+
+image:
+  repository: 10.1.11.100/middleware
+  pullPolicy: IfNotPresent
+  redisImageTag: 5.0.8
+  exporterImageTag: v1
+  initImageTag: v1.3.2-1
+
+testImage:
+  repository:  harmonyware.harbor.cn/middleware/operator-test-framework
+  pullPolicy: Always
+  tag: v0.3
+
+nameOverride: ""
+fullnameOverride: ""
+
+#建议设置pod 内存limit 的80%，单位为mb和gb
+redisMaxMemory: 409.6mb
+
+redis:
+  replicas: 6
+  resources:
+    limits:
+      cpu: "0.2"
+      memory: 512Mi
+    requests:
+      cpu: "0.1"
+      memory: 128Mi
+
+sentinel:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 10m
+    limits:
+      memory: 100Mi
+
+nodeAffinity: []
+
+
+

@@ -1,0 +1,7 @@
+apiVersion: redis.middleware.hc.cn/v1alpha1
+kind: RedisCluster
+metadata:
+  name: RedisCluster-sample
+spec:
+  # Add fields here
+  foo: bar

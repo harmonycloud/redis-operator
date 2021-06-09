@@ -1,0 +1,10 @@
+apiVersion: v2
+appVersion: 5.0.8
+description: Redis by Harmonycloud
+name: redis
+type: application
+version: 5.0.8
+
+
+
+

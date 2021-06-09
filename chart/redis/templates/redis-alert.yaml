@@ -1,0 +1,181 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "redis.fullname" . }}
+  labels:
+    prometheus: k8s
+    role: alert-rules
+spec:
+  groups:
+    - name: redis-rules
+      rules:
+        # 节点不健康
+        - alert: RedisUnhealthy
+          expr: redis_up{service='{{ include "redis.fullname" . }}'} < 1
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis instance is unhealthy
+            summary: redis instance is unhealthy
+        # 连接客户端过多
+        - alert: RedisLargConnect
+          expr: redis_connected_clients{service='{{ include "redis.fullname" . }}'}/redis_config_maxclients{service=~"${{ include "redis.fullname" . }}.*"} > 0.8
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis instance is too many connect
+            summary: redis instance is too many connect
+        # 连接阻塞过多
+        - alert: RedisLargeBlockConnect
+          expr: redis_large_block_connect{service='{{ include "redis.fullname" . }}'}/redis_connected_clients{service='{{ include "redis.fullname" . }}'} > 0.2
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis instance is too many block connect
+            summary: redis instance is too many block connect
+        # 连接拒绝
+        - alert: RedisRejectedConnections
+          expr: increase(redis_rejected_connections_total{service='{{ include "redis.fullname" . }}'}[1m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis rejected connections (instance {{`{{ $labels.instance }}`}})
+            description: Some connections to Redis has been rejected\n  VALUE = {{`{{ $value }}`}}\n  LABELS {{`{{ $labels }}`}}
+        # 查询过慢
+        - alert: RedisQuerySlow
+          expr: avg_over_time(redis_commands_duration_seconds_total{cmd="select",service=~"{{ include "redis.fullname" . }}.*"}[5m])>0.05
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis instance avg select time is slow
+            summary: redis instance avg select time is slow
+        # 最近一次慢查询过长
+        - alert: RedisSlowExecutionLong
+          expr: redis_last_slow_execution_duration_seconds{service='{{ include "redis.fullname" . }}'} > 10
+          for: 30s
+          labels:
+            severity: info
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis low executionLong is long
+            summary: redis low executionLong is long
+        # 命中率过低
+        - alert: RedisHitsRateLow
+          expr: redis_keyspace_hits_total{service='{{ include "redis.fullname" . }}'}/(redis_keyspace_hits_total{service='{{ include "redis.fullname" . }}'}+redis_keyspace_misses_total{service='{{ include "redis.fullname" . }}'}-redis_expired_keys_total{service='{{ include "redis.fullname" . }}'}) < 0.5
+          for: 30s
+          labels:
+            severity: info
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis hit rate is low
+            summary: redis hit rate is low
+        # 副本数量不正确
+        - alert: RedisReplicationBroken
+          expr: delta(redis_connected_slaves{service='{{ include "redis.fullname" . }}'}[1m]) < 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis replication broken (instance {{`{{ $labels.instance }}`}})
+            description: Redis instance lost a slave\n  VALUE = {{`{{ $value }}`}}\n  LABELS {{`{ { $labels }}`}}
+        # slave丢失
+        - alert: RedisDisconnectedSlaves
+          expr: count without (instance, job) (redis_connected_slaves{service='{{ include "redis.fullname" . }}'}) - sum without (instance, job) (redis_connected_slaves{service='{{ include "redis.fullname" . }}'}) - 1 > 1
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis disconnected slaves (instance {{`{{ $labels.instance }}`}})
+            description: Redis not replicating for all slaves. Consider reviewing the redis replication status.\n  VALUE = {{`{{ $value }}`}}\n  LABELS {{`{ { $labels } }`}}
+        # 备份失败
+        - alert: RedisMissingBackup
+          expr: time() - redis_rdb_last_save_timestamp_seconds{service='{{ include "redis.fullname" . }}'} > 60 * 60 * 24
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis missing backup (instance {{`{{ $labels.instance }}`}})
+            description: Redis has not been backuped for 24 hours\n  VALUE = {{`{{ $value }}`}}\n  LABELS {{`{ { $labels } }`}}
+        # 内存过高
+        - alert: RedisOutOfConfiguredMaxmemory
+          expr: redis_memory_max_bytes{service='{{ include "redis.fullname" . }}'}!=0 and redis_memory_used_bytes{service='{{ include "redis.fullname" . }}'} / redis_memory_max_bytes{service='{{ include "redis.fullname" . }}'} * 100 > 90
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: Redis out of configured maxmemory (instance {{`{{ $labels.instance }}`}})
+            description: Redis is running out of configured maxmemory (> 90%)\n  VALUE = {{`{{ $value }}`}}\n  LABELS {{`{{ $labels }}`}}
+    - name: redis-sentine
+      rules:
+        # 哨兵监控的master不正常
+        - alert: RedisSentinelWatchNodeUnhealthy
+          expr: redis_sentinel_master_status{service='{{ include "redis.fullname" . }}'} == 0
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis sentinel watch node is unhealthy
+            summary: redis sentinel watch node is unhealthy
+        # 哨兵数量不对
+        - alert: RedisSentries_num
+          expr: redis_sentinel_master_sentinels{service='{{ include "redis.fullname" . }}'}%2 == 0
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis sentinel num is not right
+            summary: redis sentinel num is not right
+    - name: redis-cluster
+      rules:
+        # cluster存在失败的数据槽
+        - alert: RedisSlotsFail
+          expr: redis_cluster_slots_fail{service='{{ include "redis.fullname" . }}'} > 0
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis slot is failed
+            summary: redis slot is failed
+        # cluster模式node数量过少
+        - alert: RedisClusterKnownNodesLittle
+          expr: redis_cluster_known_nodes{service='{{ include "redis.fullname" . }}'} < 6
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis cluster node num is not right
+            summary: redis cluster node num is not right
+        # cluster状态异常
+        - alert: RedisClusterState
+          expr: redis_cluster_state{service='{{ include "redis.fullname" . }}'} ==0
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            product: harmonycloud
+            service: metrics
+            message: redis cluster state is failed
+            summary: redis cluster state is failed

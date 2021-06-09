@@ -1,0 +1,24 @@
+# permissions for end users to edit RedisCluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: RedisCluster-editor-role
+rules:
+- apiGroups:
+  - redis.middleware.hc.cn
+  resources:
+  - RedisCluster
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - redis.middleware.hc.cn
+  resources:
+  - RedisCluster/status
+  verbs:
+  - get
